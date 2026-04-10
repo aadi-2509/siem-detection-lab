@@ -1,0 +1,75 @@
+<!--
+  Persistence Detection
+  MITRE ATT&CK: T1053.003 (Cron), T1136.001 (Create Account), T1098 (Account Manipulation)
+  Tactic: Persistence
+
+  These rules watch for the most common ways attackers establish
+  persistence on Linux systems. Cron and user creation are both
+  legitimate admin activities, so these rules are intentionally
+  set at medium severity and meant to feed into a correlation
+  rule (if cron modification + new user + firewall change all
+  happen within an hour, that's a different story).
+-->
+
+<group name="local,syslog,persistence,">
+
+  <!-- Crontab edited -->
+  <rule id="100300" level="7">
+    <if_sid>40101</if_sid>
+    <description>Crontab modified by $(srcuser) on $(hostname)</description>
+    <options>no_full_log</options>
+    <mitre>
+      <id>T1053.003</id>
+    </mitre>
+  </rule>
+
+  <!-- System cron directories modified (more suspicious than user crontab) -->
+  <rule id="100301" level="10">
+    <if_group>syscheck</if_group>
+    <field name="file">/etc/cron\.d/|/etc/cron\.daily/|/etc/cron\.hourly/|/etc/crontab</field>
+    <description>System cron file modified: $(file)</description>
+    <mitre>
+      <id>T1053.003</id>
+    </mitre>
+  </rule>
+
+  <!-- New local user account created -->
+  <rule id="100310" level="8">
+    <if_sid>5905</if_sid>
+    <description>New local user account created: $(dstuser) by $(srcuser)</description>
+    <mitre>
+      <id>T1136.001</id>
+    </mitre>
+  </rule>
+
+  <!-- New user added to sudo/wheel group — escalation risk -->
+  <rule id="100311" level="11">
+    <if_sid>5905</if_sid>
+    <match>sudo|wheel|admin</match>
+    <description>New user $(dstuser) added to privileged group by $(srcuser)</description>
+    <mitre>
+      <id>T1136.001</id>
+    </mitre>
+  </rule>
+
+  <!-- .ssh/authorized_keys modified -->
+  <rule id="100320" level="10">
+    <if_group>syscheck</if_group>
+    <field name="file">\.ssh/authorized_keys$</field>
+    <description>SSH authorized_keys file modified: $(file)</description>
+    <mitre>
+      <id>T1098.004</id>
+    </mitre>
+  </rule>
+
+  <!-- /etc/sudoers modified -->
+  <rule id="100321" level="12">
+    <if_group>syscheck</if_group>
+    <field name="file">/etc/sudoers$|/etc/sudoers\.d/</field>
+    <description>Sudoers file modified: $(file) — verify change is authorized</description>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+  </rule>
+
+</group>

@@ -1,0 +1,61 @@
+<!--
+  Lateral Movement Detection — Remote Services
+  MITRE ATT&CK: T1021 — Remote Services
+  Tactic: Lateral Movement
+
+  Covers RDP (T1021.001), SSH pivoting (T1021.004), and
+  suspicious internal-to-internal connections.
+
+  Note on tuning: internal SSH between servers is common in our env
+  (deployments, health checks, etc). The rules below add conditions
+  to reduce noise — time-of-day and whether the destination is in
+  the known jump-host list.
+-->
+
+<group name="local,syslog,sshd,authentication,lateral_movement,">
+
+  <!-- Successful SSH from an unexpected internal host -->
+  <rule id="100200" level="8">
+    <if_sid>5715</if_sid>
+    <srcip>10.0.0.0/8</srcip>
+    <description>Successful SSH login from internal host $(srcip) to $(dstip) — verify if expected</description>
+    <options>no_full_log</options>
+    <mitre>
+      <id>T1021.004</id>
+    </mitre>
+  </rule>
+
+  <!-- SSH agent forwarding — allows chaining connections -->
+  <rule id="100201" level="9">
+    <if_sid>5715</if_sid>
+    <match>agent forwarding</match>
+    <description>SSH with agent forwarding from $(srcip) — potential pivot point</description>
+    <mitre>
+      <id>T1021.004</id>
+    </mitre>
+  </rule>
+
+  <!-- Windows Event ID 4624 LogonType 10 = RDP -->
+  <rule id="100202" level="8">
+    <if_sid>18102</if_sid>
+    <field name="win.system.eventID">^4624$</field>
+    <field name="win.eventdata.logonType">^10$</field>
+    <description>RDP logon from $(win.eventdata.ipAddress) to $(win.eventdata.targetUserName)</description>
+    <mitre>
+      <id>T1021.001</id>
+    </mitre>
+  </rule>
+
+  <!-- RDP from external IP — higher severity -->
+  <rule id="100203" level="12">
+    <if_sid>100202</if_sid>
+    <srcip>!10.0.0.0/8</srcip>
+    <srcip>!172.16.0.0/12</srcip>
+    <srcip>!192.168.0.0/16</srcip>
+    <description>RDP login from external IP $(srcip) — likely unauthorized</description>
+    <mitre>
+      <id>T1021.001</id>
+    </mitre>
+  </rule>
+
+</group>

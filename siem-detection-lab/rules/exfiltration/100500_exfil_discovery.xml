@@ -1,0 +1,94 @@
+<!--
+  Exfiltration Detection
+  MITRE ATT&CK: T1048, T1567, T1074
+  Tactic: Exfiltration / Collection
+-->
+
+<group name="local,syslog,exfiltration,">
+
+  <!-- Data staged in /tmp before exfil -->
+  <rule id="100500" level="8">
+    <if_sid>550</if_sid>
+    <field name="file">/tmp/</field>
+    <regex>\.(tar|tar\.gz|zip|7z|gz|rar)$</regex>
+    <description>Archive file created in /tmp: $(file) — possible data staging</description>
+    <options>no_full_log</options>
+    <mitre>
+      <id>T1074.001</id>
+    </mitre>
+  </rule>
+
+  <!-- curl/wget posting data to external host -->
+  <rule id="100501" level="11">
+    <if_sid>5501</if_sid>
+    <regex>curl.*(--data|-d ).*http|wget.*--post-data.*http</regex>
+    <srcip>!10.0.0.0/8</srcip>
+    <description>Suspicious outbound HTTP POST with data from $(hostname)</description>
+    <mitre>
+      <id>T1048.003</id>
+    </mitre>
+  </rule>
+
+  <!-- Abnormally large DNS query — potential DNS tunneling -->
+  <rule id="100502" level="10">
+    <if_sid>5500</if_sid>
+    <regex>query.*\.[a-zA-Z0-9]{40,}\.</regex>
+    <description>Abnormally long DNS query — possible DNS tunneling or exfiltration</description>
+    <mitre>
+      <id>T1048.001</id>
+    </mitre>
+  </rule>
+
+</group>
+
+
+<!--
+  Discovery Detection
+  MITRE ATT&CK: T1046 (Network Scan), T1082 (System Info), T1580 (Cloud Infra)
+  Tactic: Discovery
+-->
+
+<group name="local,syslog,discovery,">
+
+  <!-- nmap or masscan detected in process list or logs -->
+  <rule id="100600" level="8">
+    <if_sid>5501</if_sid>
+    <regex>nmap |masscan |zmap |rustscan </regex>
+    <description>Network scanning tool executed on $(hostname)</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+  </rule>
+
+  <!-- Multiple connection refused in short window → port scan -->
+  <rule id="100601" level="7" frequency="20" timeframe="30">
+    <if_sid>4101</if_sid>
+    <same_source_ip />
+    <description>Possible port scan: 20+ refused connections from $(srcip) in 30s</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+  </rule>
+
+  <!-- AWS metadata endpoint accessed from within instance -->
+  <rule id="100602" level="9">
+    <if_sid>5501</if_sid>
+    <match>169.254.169.254</match>
+    <description>AWS instance metadata service accessed — check for SSRF or privilege escalation attempt</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+  </rule>
+
+  <!-- System enumeration commands run as root -->
+  <rule id="100603" level="6">
+    <if_sid>5402</if_sid>
+    <field name="dstuser">^root$</field>
+    <regex>cat /etc/passwd|cat /etc/shadow|id;|whoami;|uname -a</regex>
+    <description>System enumeration command run as root by $(srcuser)</description>
+    <mitre>
+      <id>T1082</id>
+    </mitre>
+  </rule>
+
+</group>

@@ -1,0 +1,86 @@
+<!--
+  Defense Evasion Detection
+  MITRE ATT&CK: T1070.002 (Log Deletion), T1014 (Rootkit), T1562 (Impair Defenses)
+  Tactic: Defense Evasion
+
+  These are the rules I prioritize most. An attacker clearing logs
+  or disabling auditd is a strong signal that they've already
+  established access and are trying to hide what they did.
+  Level 13+ means these go to PagerDuty immediately in my setup.
+-->
+
+<group name="local,syslog,defense_evasion,">
+
+  <!-- Log files deleted or truncated -->
+  <rule id="100400" level="13">
+    <if_group>syscheck</if_group>
+    <field name="file">/var/log/</field>
+    <field name="event_type">deleted</field>
+    <description>Log file deleted: $(file) — possible anti-forensics activity</description>
+    <mitre>
+      <id>T1070.002</id>
+    </mitre>
+  </rule>
+
+  <!-- Log cleared via shell redirect (> /var/log/auth.log) -->
+  <rule id="100401" level="14">
+    <if_sid>5501</if_sid>
+    <regex>truncate.*\/var\/log|> \/var\/log|rm -f.*\/var\/log</regex>
+    <description>System log truncated or deleted via command: possible log tampering</description>
+    <mitre>
+      <id>T1070.002</id>
+    </mitre>
+  </rule>
+
+  <!-- auditd stopped or disabled -->
+  <rule id="100402" level="13">
+    <if_sid>1002</if_sid>
+    <match>auditd.*stopped|service auditd stop|systemctl stop auditd</match>
+    <description>Auditd service stopped — audit trail may be incomplete</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+  </rule>
+
+  <!-- iptables/ufw flushed or stopped -->
+  <rule id="100403" level="11">
+    <if_sid>5501</if_sid>
+    <regex>iptables -F|iptables --flush|ufw disable|systemctl stop firewalld</regex>
+    <description>Firewall rules flushed or service stopped on $(hostname)</description>
+    <mitre>
+      <id>T1562.004</id>
+    </mitre>
+  </rule>
+
+  <!-- rkhunter or chkrootkit flagged something -->
+  <rule id="100410" level="14">
+    <if_sid>510</if_sid>
+    <match>INFECTED|rootkit|Warning: Hidden</match>
+    <description>Rootkit detection tool flagged suspicious files on $(hostname)</description>
+    <mitre>
+      <id>T1014</id>
+    </mitre>
+  </rule>
+
+  <!-- Binary replacement — syscheck hash mismatch on system binary -->
+  <rule id="100411" level="13">
+    <if_group>syscheck</if_group>
+    <field name="file">/bin/|/usr/bin/|/sbin/|/usr/sbin/</field>
+    <field name="event_type">modified</field>
+    <description>System binary modified: $(file) — possible rootkit or supply chain attack</description>
+    <mitre>
+      <id>T1014</id>
+    </mitre>
+  </rule>
+
+  <!-- Kernel module loaded from non-standard path -->
+  <rule id="100420" level="12">
+    <if_sid>1003</if_sid>
+    <regex>insmod \/tmp\/|modprobe.*\/tmp\/|insmod \/dev\/</regex>
+    <description>Kernel module loaded from suspicious path — possible rootkit installation</description>
+    <mitre>
+      <id>T1547.006</id>
+    </mitre>
+  </rule>
+
+</group>

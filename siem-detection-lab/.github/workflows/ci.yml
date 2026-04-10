@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov flake8
+
+      - name: Lint
+        run: flake8 api/ scripts/ --max-line-length=120 --ignore=E501,W503
+
+      - name: Validate XML rule syntax
+        run: |
+          python -c "
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          errors = []
+          for f in Path('rules').rglob('*.xml'):
+              try:
+                  ET.parse(f)
+                  print(f'OK: {f}')
+              except ET.ParseError as e:
+                  errors.append(f'{f}: {e}')
+          if errors:
+              for e in errors: print('FAIL:', e)
+              exit(1)
+          print(f'All XML files valid.')
+          "
+
+      - name: Run rule unit tests
+        run: pytest tests/test_rules.py -v --cov=. --cov-report=term-missing
+
+      - name: Run API tests
+        run: pytest tests/test_api.py -v
+
+  validate-docker-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate docker-compose syntax
+        run: |
+          docker compose config --quiet
+        continue-on-error: true
